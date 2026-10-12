@@ -12,7 +12,7 @@ Session name:
 [ Reroll ] [ Dismiss ] [ Stop ] ≈$0.0003 (2.6k tokens) · session …
 ```
 
-Each name is an editable field: change it if you like, then press Enter in it or its **Apply** button (or `1`-`3`) to rename the session (`/rename`). To type in a field, focus the band (a click, or `ctrl+x tab`); `Esc` gives the keys back to the prompt. Once a name is picked or dismissed, the band stays hidden until the topic of the conversation actually changes. **Reroll** asks for 3 different names; **Stop** turns the suggestions off for the rest of the session. While names are being written, a spinner turns in the band (`⠹ generating names…`): on a reroll, on `/rs`, and after a reply when the band is already up or the session has no name yet.
+Each name is an editable field: change it if you like, then press Enter in it or its **Apply** button (or `1`-`3` in the terminal) to rename the session (`/rename`). Once a name is applied from the band, automatic suggestions stop for the session, as with **Stop**: `/rs` still suggests names on demand, `/rs start` turns them back on. To type in a field, focus the band (a click, or `ctrl+x tab`); `Esc` gives the keys back to the prompt. Once a name is picked or dismissed, the band stays hidden until the topic of the conversation actually changes. **Reroll** asks for 3 different names; **Stop** turns the suggestions off for the rest of the session. While names are being written, a spinner turns in the band (`⠹ generating names…`): on a reroll, on `/rs`, and after a reply when the band is already up or the session has no name yet.
 
 ## Install
 

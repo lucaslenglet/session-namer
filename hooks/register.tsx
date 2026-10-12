@@ -50,6 +50,7 @@ const enqueue = <T,>(job: () => Promise<T>): Promise<T> => {
 // An automatic request already waiting in the queue: another one adds nothing.
 let isAutoQueued = false
 
+const APPLIED_HINT = 'No more automatic suggestions in this session: /rs suggests new names, /rs start turns them back on.'
 const STOPPED_HINT = 'Automatic suggestions are stopped for this session; /rs start turns them back on.'
 
 /** Replaces the names shown; new names drop the edits made to the previous ones. */
@@ -237,6 +238,8 @@ export const register: Register = (on, options) => {
     const elements = $.ui.resolve(e)
     const { Box, Button, Text } = elements
     const Input = 'Input' in elements ? elements.Input : undefined
+    // Only the terminal hides a field's own submit button while it is not focused.
+    const hasApplyButton = !Input || e.surface === 'terminal'
     if (shown.length === 0) {
       return (
         <Box flexDirection="row" gap={1}>
@@ -259,12 +262,14 @@ export const register: Register = (on, options) => {
         return
       }
       try {
-        await $.command.run({ command: 'rename', args: name })
+        const result = await $.command.run({ command: 'rename', args: name })
+        $.ui.toast(`${result.text?.trim() || `Session renamed to: ${name}`}. ${APPLIED_HINT}`)
       } catch {
         $.ui.toast(`Could not rename, type: /rename ${name}`)
       }
       await update($, baseline, () => name)
-      await show($, [])
+      // A name applied from the band ends automatic suggestions, as Stop does.
+      await setStopped($, true)
     }
 
     const dismiss = async () => {
@@ -293,21 +298,25 @@ export const register: Register = (on, options) => {
         {shown.map((_, i) => (
           <Box key={`row-${i}`} flexDirection="row" gap={1}>
             {Input && (
-              <Input
-                key={`name-${i}`}
-                value={valueAt(i)}
-                submitLabel="apply"
-                onInput={(value: string) => update($, edits, prev => ({ ...prev, [i]: value }))}
-                onSubmit={(value: string) => choose(value)}
+              <Box flexGrow={1}>
+                <Input
+                  key={`name-${i}`}
+                  value={valueAt(i)}
+                  submitLabel={hasApplyButton ? 'apply' : 'Apply'}
+                  onInput={(value: string) => update($, edits, prev => ({ ...prev, [i]: value }))}
+                  onSubmit={(value: string) => choose(value)}
+                />
+              </Box>
+            )}
+            {hasApplyButton && (
+              <Button
+                key={`pick-${i}`}
+                label={Input ? 'Apply' : valueAt(i)}
+                hotkey={String(i + 1)}
+                variant={i === 0 ? 'primary' : 'secondary'}
+                onPress={() => choose(valueAt(i))}
               />
             )}
-            <Button
-              key={`pick-${i}`}
-              label={Input ? 'Apply' : valueAt(i)}
-              hotkey={String(i + 1)}
-              variant={i === 0 ? 'primary' : 'secondary'}
-              onPress={() => choose(valueAt(i))}
-            />
           </Box>
         ))}
         <Box flexDirection="row" flexWrap="wrap" gap={1}>
