@@ -172,7 +172,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
     // Act
     await ui.input({ key: 'name-2', text: 'bug-42/claude-mods: fix the band layout', kind: 'change' })
     const kept = (await (await mountBand($, surface)).find({ key: 'name-2' }))?.props.value
-    await (await mountBand($, surface)).press({ key: 'pick-2' })
+    const band = await mountBand($, surface)
+    if (surface === 'terminal') await band.press({ key: 'pick-2' })
+    else await band.input({ key: 'name-2', text: String(kept ?? '') })
 
     // Assert
     expect(fields.map(f => f.props.value)).toEqual([
@@ -212,29 +214,51 @@ test('after each reply: suggests, then stays quiet until the subject changes', a
   await $.turn.complete(TURN)
   await clock.advance(1)
   expect(asked).toHaveLength(1)
-  expect(await (await band()).find({ key: 'pick-2' })).toBeDefined()
+  expect(await (await band()).find({ key: 'name-2' })).toBeDefined()
 
-  // A name is picked.
-  await (await band()).press({ key: 'pick-1' })
-  expect(await (await band()).find({ key: 'pick-0' })).toBeUndefined()
+  // "Dismiss" hides it.
+  await (await band()).press({ key: 'dismiss' })
+  expect(await (await band()).find({ key: 'name-0' })).toBeUndefined()
 
   // Same subject: Haiku is consulted but nothing is shown.
   same = true
   await $.turn.complete(TURN)
   await clock.advance(1)
   expect(asked).toHaveLength(2)
-  expect(asked[1]).toContain('CURRENT NAME: claude-mods-mod: init spec')
-  expect(await (await band()).find({ key: 'pick-0' })).toBeUndefined()
+  expect(asked[1]).toContain('CURRENT NAME: feat/claude-mods-mod: implement session namer')
+  expect(await (await band()).find({ key: 'name-0' })).toBeUndefined()
 
   // The subject changes: the band comes back.
   same = false
   await $.turn.complete(TURN)
   await clock.advance(1)
-  expect(await (await band()).find({ key: 'pick-0' })).toBeDefined()
+  expect(await (await band()).find({ key: 'name-0' })).toBeDefined()
+})
 
-  // "Dismiss" hides it too.
-  await (await band()).press({ key: 'dismiss' })
-  expect(await (await band()).find({ key: 'pick-0' })).toBeUndefined()
+test('a name applied from the band stops automatic suggestions until /rs start', async ($, on) => {
+  // Arrange
+  const clock = mock.clock(on)
+  const { asked, renamed } = world(on, () => HAIKU)
+  await $.turn.complete(TURN)
+  await clock.advance(1)
+
+  // Act
+  await (await mountBand($)).press({ key: 'pick-1' })
+  await $.turn.complete(TURN)
+  await clock.advance(1)
+  const askedWhileStopped = asked.length
+  const onDemand = await $.command.run({ command: 'rs', args: '', ...RUN })
+  await (await mountBand($)).press({ key: 'dismiss' })
+  await $.command.run({ command: 'rs', args: 'start', ...RUN })
+  await $.turn.complete(TURN)
+  await clock.advance(1)
+
+  // Assert
+  expect(renamed).toEqual(['claude-mods-mod: init spec'])
+  expect(askedWhileStopped).toBe(1)
+  expect(onDemand.text).toContain('feat/claude-mods-mod: implement session namer')
+  expect(asked).toHaveLength(3)
+  expect(await (await mountBand($)).find({ key: 'name-0' })).toBeDefined()
 })
 
 test('subagent turns and interrupted turns do not call Haiku', async ($, on) => {
@@ -310,7 +334,7 @@ test('the cost is shown in /rs, the band and /rs help, and counts every call', a
   expect(texts).toContain('session ≈<$0.0001 (2 tokens, 1 call)')
 
   // A call that changes nothing on screen still counts in the total.
-  await ui.press({ key: 'pick-0' })
+  await ui.press({ key: 'dismiss' })
   same = true
   await $.turn.complete(TURN)
   await clock.advance(1)
