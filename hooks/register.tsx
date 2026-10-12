@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface as Engine, Register } from 'claude-code'
 
-import type { Baseline, Spend, Suggestions } from '../types'
+import type { Baseline, Edits, Spend, Suggestions } from '../types'
 import {
   addUsage,
   DEFAULT_TEMPLATE,
@@ -25,6 +25,7 @@ const total = atom({ plugin: 'session-namer', key: 'total' } as const, NO_SPEND 
 const isStopped = atom({ plugin: 'session-namer', key: 'isStopped' } as const, false)
 const isGenerating = atom({ plugin: 'session-namer', key: 'isGenerating' } as const, false)
 const frame = atom({ plugin: 'session-namer', key: 'frame' } as const, 0)
+const edits = atom({ plugin: 'session-namer', key: 'edits' } as const, {} as Edits)
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 
@@ -50,6 +51,13 @@ const enqueue = <T,>(job: () => Promise<T>): Promise<T> => {
 let isAutoQueued = false
 
 const STOPPED_HINT = 'Automatic suggestions are stopped for this session; /rs start turns them back on.'
+
+/** Replaces the names shown; new names drop the edits made to the previous ones. */
+async function show($: Engine, next: Suggestions) {
+  if (sameList(await read($, suggestions), next)) return
+  await update($, suggestions, () => next)
+  await update($, edits, () => ({}))
+}
 
 /**
  * Asks Haiku for 3 names. Without `force`, shows them only if the subject has
@@ -83,7 +91,7 @@ async function suggest($: Engine, force: boolean, avoid: readonly string[] = [])
   if (!force && ((current !== null && verdict.isSameSubject) || (await read($, isStopped)))) return []
 
   const next = names(settings.template, project, verdict)
-  await update($, suggestions, prev => (sameList(prev, next) ? prev : next))
+  await show($, next)
   await update($, lastCall, () => addUsage(NO_SPEND, r.usage))
   return next
 }
@@ -123,7 +131,7 @@ async function auto($: Engine): Promise<string[] | string> {
 /** Turns automatic suggestions off (hiding the band) or back on for this session. */
 async function setStopped($: Engine, stopped: boolean) {
   await update($, isStopped, () => stopped)
-  if (stopped) await update($, suggestions, () => [])
+  if (stopped) await show($, [])
 }
 
 /** Runs a suggestion outside the turn, without delaying it. */
@@ -215,7 +223,7 @@ export const register: Register = (on, options) => {
     const title = e.args.trim()
     if (title) {
       await update($, baseline, () => title)
-      await update($, suggestions, () => [])
+      await show($, [])
     }
     return result
   }).catch(($, e, next) => next(e))
@@ -226,7 +234,9 @@ export const register: Register = (on, options) => {
     if (e.props.hasSurvey || (shown.length === 0 && !generating)) return next(e)
     const spin = generating ? `${SPINNER[(await read($, frame)) % SPINNER.length]} generating names…` : ''
 
-    const { Box, Button, Text } = $.ui.resolve(e)
+    const elements = $.ui.resolve(e)
+    const { Box, Button, Text } = elements
+    const Input = 'Input' in elements ? elements.Input : undefined
     if (shown.length === 0) {
       return (
         <Box flexDirection="row" gap={1}>
@@ -239,21 +249,28 @@ export const register: Register = (on, options) => {
     }
     const call = await read($, lastCall)
     const spent = await read($, total)
+    const typed = await read($, edits)
+    const valueAt = (i: number) => typed[i] ?? shown[i] ?? ''
 
-    const choose = async (name: string) => {
+    const choose = async (typed: string) => {
+      const name = typed.trim()
+      if (!name) {
+        $.ui.toast('Type a name before applying it.')
+        return
+      }
       try {
         await $.command.run({ command: 'rename', args: name })
       } catch {
         $.ui.toast(`Could not rename, type: /rename ${name}`)
       }
       await update($, baseline, () => name)
-      await update($, suggestions, () => [])
+      await show($, [])
     }
 
     const dismiss = async () => {
       // The current subject becomes the baseline: suggestions only come back if it changes.
       await update($, baseline, () => shown[0])
-      await update($, suggestions, () => [])
+      await show($, [])
     }
 
     const onReroll = async () => {
@@ -271,31 +288,44 @@ export const register: Register = (on, options) => {
     }
 
     return (
-      <Box flexDirection="row" flexWrap="wrap" gap={1}>
+      <Box flexDirection="column">
         <Text dimColor>Session name:</Text>
-        {shown.map((name, i) => (
-          <Button
-            key={`pick-${i}`}
-            label={name}
-            hotkey={String(i + 1)}
-            variant={i === 0 ? 'primary' : 'secondary'}
-            onPress={() => choose(name)}
-          />
+        {shown.map((_, i) => (
+          <Box key={`row-${i}`} flexDirection="row" gap={1}>
+            {Input && (
+              <Input
+                key={`name-${i}`}
+                value={valueAt(i)}
+                submitLabel="apply"
+                onInput={(value: string) => update($, edits, prev => ({ ...prev, [i]: value }))}
+                onSubmit={(value: string) => choose(value)}
+              />
+            )}
+            <Button
+              key={`pick-${i}`}
+              label={Input ? 'Apply' : valueAt(i)}
+              hotkey={String(i + 1)}
+              variant={i === 0 ? 'primary' : 'secondary'}
+              onPress={() => choose(valueAt(i))}
+            />
+          </Box>
         ))}
-        {generating ? (
-          <Text color="claude">
-            {spin}
-          </Text>
-        ) : (
-          <Button key="reroll" label="Reroll" hotkey="r" onPress={onReroll} />
-        )}
-        <Button key="dismiss" label="Dismiss" hotkey="x" role="dismiss" onPress={dismiss} />
-        <Button key="stop" label="Stop" hotkey="s" onPress={onStop} />
-        {isCostShown && (
-          <Text key="cost" dimColor>
-            {call ? `${spendText(call)} · ` : ''}session {spendText(spent, true)}
-          </Text>
-        )}
+        <Box flexDirection="row" flexWrap="wrap" gap={1}>
+          {generating ? (
+            <Text color="claude">
+              {spin}
+            </Text>
+          ) : (
+            <Button key="reroll" label="Reroll" hotkey="r" onPress={onReroll} />
+          )}
+          <Button key="dismiss" label="Dismiss" hotkey="x" role="dismiss" onPress={dismiss} />
+          <Button key="stop" label="Stop" hotkey="s" onPress={onStop} />
+          {isCostShown && (
+            <Text key="cost" dimColor>
+              {call ? `${spendText(call)} · ` : ''}session {spendText(spent, true)}
+            </Text>
+          )}
+        </Box>
       </Box>
     )
   })

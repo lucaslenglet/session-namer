@@ -12,24 +12,19 @@ export type Verdict = {
   suggestions: Parts[]
 }
 
-/** Project code of 3 to 5 characters taken from the folder name: ClaudeMods → clmod. */
+/** Project code: the folder name in kebab-case, ClaudeMods → claude-mods. */
 export function projectCode(cwd: string): string {
-  const base = cwd.replace(/\/+$/, '').split('/').pop() ?? ''
+  const base = cwd.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
   const words = base
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .split(/[^A-Za-z0-9]+/)
     .filter(Boolean)
     .map(w => w.toLowerCase())
 
-  const [first, second] = words
-  if (first === undefined) return 'proj'
-  if (second === undefined) return first.slice(0, 5)
-  if (words.length === 2) return first.slice(0, 2) + second.slice(0, 3)
-
-  return words.map(w => w.charAt(0)).join('').slice(0, 5)
+  return words.join('-') || 'project'
 }
 
-export const DEFAULT_TEMPLATE = '{type:L}-{id}/{project:L:,5}-{kind:L}: {desc:L:w2,5}'
+export const DEFAULT_TEMPLATE = '{type:L}-{id}/{project:L}-{kind:L}: {desc:L:w2,5}'
 
 export const FIELDS = ['type', 'id', 'project', 'kind', 'desc'] as const
 export type Field = (typeof FIELDS)[number]
@@ -122,8 +117,8 @@ const OPENERS = /[([{<]/
  * separator: the one before it if it follows a filled field and does not open a
  * parenthesis/bracket, otherwise the one after it. Empty pairs and orphan
  * openers are then removed.
- *   {type:L}-{id}/{project}-{kind}: {desc}  →  bug-1234/clmod-mod: init spec
- *                                           →  clmod: init spec
+ *   {type:L}-{id}/{project}-{kind}: {desc}  →  bug-1234/claude-mods-mod: init spec
+ *                                           →  claude-mods: init spec
  */
 export function formatName(template: string, project: string, p: Parts): string {
   const values: Record<Field, string> = {

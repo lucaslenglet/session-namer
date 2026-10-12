@@ -5,10 +5,14 @@ A [Claude Code](https://claude.com/claude-code) mod that suggests a name for you
 After each Claude reply, Haiku reads the conversation (your messages and Claude's text replies, no tool output) and suggests 3 names in a band above the prompt:
 
 ```
-Session name: [ feat/clmod-mod: implement session namer ] [ … ] [ … ] [ Reroll ] [ Dismiss ] [ Stop ] ≈$0.0003 (2.6k tokens) · session …
+Session name:
+[ feat/claude-mods-mod: implement session namer ] [ 1 Apply ]
+[ claude-mods-mod: init spec                     ] [ 2 Apply ]
+[ bug-42/claude-mods: fix band render            ] [ 3 Apply ]
+[ Reroll ] [ Dismiss ] [ Stop ] ≈$0.0003 (2.6k tokens) · session …
 ```
 
-Click one to rename the session (`/rename`). Once a name is picked or dismissed, the band stays hidden until the topic of the conversation actually changes. **Reroll** asks for 3 different names; **Stop** turns the suggestions off for the rest of the session. While names are being written, a spinner turns in the band (`⠹ generating names…`): on a reroll, on `/rs`, and after a reply when the band is already up or the session has no name yet.
+Each name is an editable field: change it if you like, then press Enter in it or its **Apply** button (or `1`-`3`) to rename the session (`/rename`). To type in a field, focus the band (a click, or `ctrl+x tab`); `Esc` gives the keys back to the prompt. Once a name is picked or dismissed, the band stays hidden until the topic of the conversation actually changes. **Reroll** asks for 3 different names; **Stop** turns the suggestions off for the rest of the session. While names are being written, a spinner turns in the band (`⠹ generating names…`): on a reroll, on `/rs`, and after a reply when the band is already up or the session has no name yet.
 
 ## Install
 
@@ -36,7 +40,7 @@ In `/config`, search for `session name`:
 
 | Setting | Default | |
 |---|---|---|
-| **Session name format** | `{type:L}-{id}/{project:L:,5}-{kind:L}: {desc:L:w2,5}` | How names are built |
+| **Session name format** | `{type:L}-{id}/{project:L}-{kind:L}: {desc:L:w2,5}` | How names are built |
 | **Session name rules for Haiku** | *(empty)* | Free text that overrides the default rules, e.g. `description in French; allowed types: feat, fix, chore` |
 | **Session name project code** | *(empty: derived from the folder name)* | Fixed value for `{project}` |
 | **Session name cost display** | on | Show the Haiku cost in the band and in `/rs` (`/rs help` always shows the session total) |
@@ -49,16 +53,16 @@ Text is kept as typed; each `{field}` is replaced by a value Haiku finds in the 
 |---|---|---|
 | `{type}` | kind of work item: bug, us, pr, feat… | only if stated |
 | `{id}` | its ticket / PR number | only if stated, never invented |
-| `{project}` | project code (`ClaudeMods` → `clmod`, `prompt-optimizer` → `propt`) | always |
+| `{project}` | project code (`ClaudeMods` → `claude-mods`, `my_cool_web_app` → `my-cool-web-app`) | always |
 | `{kind}` | kind of project: f (front), b (back), cli, mod, script… | only if clear |
 | `{desc}` | what you are doing, e.g. `init spec`, `plan tests` | always (required) |
 
 With the default format:
 
 ```
-bug-1234/clmod-f: fix login redirect
-clmod-cli: plan tests
-clmod: init spec
+bug-1234/claude-mods-f: fix login redirect
+claude-mods-cli: plan tests
+claude-mods: init spec
 ```
 
 ### Field options
@@ -79,7 +83,7 @@ Haiku is told about lengths and allowed values, so it picks words that fit inste
 
 ```
 [{project}] {desc:C:w,5} ({type:U:[FEAT,FIX,CHORE]} #{id:4,_0})
-→ [clmod] Fix login redirect (FIX #0042)
+→ [claude-mods] Fix login redirect (FIX #0042)
 ```
 
 ## Cost and privacy

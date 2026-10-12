@@ -22,22 +22,28 @@ const HAIKU = JSON.stringify({
   ],
 })
 
-test('projectCode takes 3 to 5 characters from the folder name', () => {
-  expect(projectCode('/home/lucas/Dev/ClaudeMods')).toBe('clmod')
-  expect(projectCode('/x/prompt-optimizer')).toBe('propt')
+test('projectCode is the folder name in kebab-case', () => {
+  expect(projectCode('/home/lucas/Dev/ClaudeMods')).toBe('claude-mods')
+  expect(projectCode('/x/prompt-optimizer')).toBe('prompt-optimizer')
   expect(projectCode('/x/api')).toBe('api')
-  expect(projectCode('/x/frontend/')).toBe('front')
-  expect(projectCode('/x/my_cool_web_app')).toBe('mcwa')
+  expect(projectCode('/x/frontend/')).toBe('frontend')
+  expect(projectCode('/x/my_cool_web_app')).toBe('my-cool-web-app')
+  expect(projectCode('/')).toBe('project')
+})
+
+test('projectCode splits Windows paths on backslashes', () => {
+  expect(projectCode('C:\\Dev\\Git\\_github\\discord-inbox')).toBe('discord-inbox')
+  expect(projectCode('C:\\Dev\\Git\\_github\\discord-inbox\\')).toBe('discord-inbox')
 })
 
 test('formatName: default template, empty fields take their separator with them', () => {
-  const f = (p: Parameters<typeof formatName>[2]) => formatName(DEFAULT_TEMPLATE, 'clmod', p)
-  expect(f({ type: 'bug', id: '1234', kind: 'mod', desc: 'init spec' })).toBe('bug-1234/clmod-mod: init spec')
-  expect(f({ kind: 'cli', desc: 'plan tests' })).toBe('clmod-cli: plan tests')
-  expect(f({ desc: 'plan tests' })).toBe('clmod: plan tests')
-  expect(f({ type: 'pr', desc: 'review the big thing' })).toBe('pr/clmod: review the big thing')
-  expect(f({ id: 'ABC-12', desc: 'fix login' })).toBe('ABC-12/clmod: fix login')
-  expect(f({ desc: 'café menu update!' })).toBe('clmod: café menu update')
+  const f = (p: Parameters<typeof formatName>[2]) => formatName(DEFAULT_TEMPLATE, 'claude-mods', p)
+  expect(f({ type: 'bug', id: '1234', kind: 'mod', desc: 'init spec' })).toBe('bug-1234/claude-mods-mod: init spec')
+  expect(f({ kind: 'cli', desc: 'plan tests' })).toBe('claude-mods-cli: plan tests')
+  expect(f({ desc: 'plan tests' })).toBe('claude-mods: plan tests')
+  expect(f({ type: 'pr', desc: 'review the big thing' })).toBe('pr/claude-mods: review the big thing')
+  expect(f({ id: 'ABC-12', desc: 'fix login' })).toBe('ABC-12/claude-mods: fix login')
+  expect(f({ desc: 'café menu update!' })).toBe('claude-mods: café menu update')
 })
 
 test('formatName: custom template with parentheses', () => {
@@ -143,16 +149,57 @@ test('/rs shows 3 names, a click renames and hides the band', async ($, on) => {
   const { asked, renamed } = world(on, () => HAIKU)
 
   const out = await $.command.run({ command: 'rs', args: '', ...RUN })
-  expect(out.text).toContain('feat/clmod-mod: implement session namer')
-  expect(out.text).toContain('bug-42/clmod: fix band render')
+  expect(out.text).toContain('feat/claude-mods-mod: implement session namer')
+  expect(out.text).toContain('bug-42/claude-mods: fix band render')
   expect(asked[0]).toContain('CURRENT NAME: (none)')
   expect(asked[0]).toContain('- desc: at least 2 words and at most 5 words')
 
   const ui = await mountBand($)
   expect(await ui.findAll({ type: 'Button' })).toHaveLength(6)
   await ui.press({ key: 'pick-0' })
-  expect(renamed).toEqual(['feat/clmod-mod: implement session namer'])
+  expect(renamed).toEqual(['feat/claude-mods-mod: implement session namer'])
   expect(await ui.find({ key: 'pick-0' })).toBeUndefined()
+})
+
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`each name is an editable field, applied as typed (${surface})`, async ($, on) => {
+    // Arrange
+    const { renamed } = world(on, () => HAIKU)
+    await $.command.run({ command: 'rs', args: '', ...RUN })
+    const ui = await mountBand($, surface)
+    const fields = await ui.findAll({ type: 'Input' })
+
+    // Act
+    await ui.input({ key: 'name-2', text: 'bug-42/claude-mods: fix the band layout', kind: 'change' })
+    const kept = (await (await mountBand($, surface)).find({ key: 'name-2' }))?.props.value
+    await (await mountBand($, surface)).press({ key: 'pick-2' })
+
+    // Assert
+    expect(fields.map(f => f.props.value)).toEqual([
+      'feat/claude-mods-mod: implement session namer',
+      'claude-mods-mod: init spec',
+      'bug-42/claude-mods: fix band render',
+    ])
+    expect(kept).toBe('bug-42/claude-mods: fix the band layout')
+    expect(renamed).toEqual(['bug-42/claude-mods: fix the band layout'])
+  })
+}
+
+test('Enter in a field applies it; an empty field renames nothing', async ($, on) => {
+  // Arrange
+  const { renamed } = world(on, () => HAIKU)
+  await $.command.run({ command: 'rs', args: '', ...RUN })
+  const ui = await mountBand($)
+
+  // Act
+  await ui.input({ key: 'name-0', text: '   ' })
+  const stillShown = await (await mountBand($)).find({ key: 'name-0' })
+  await (await mountBand($)).input({ key: 'name-2', text: 'claude-mods: my own name' })
+
+  // Assert
+  expect(stillShown).toBeDefined()
+  expect(renamed).toEqual(['claude-mods: my own name'])
+  expect(await (await mountBand($)).find({ key: 'name-0' })).toBeUndefined()
 })
 
 test('after each reply: suggests, then stays quiet until the subject changes', async ($, on) => {
@@ -176,7 +223,7 @@ test('after each reply: suggests, then stays quiet until the subject changes', a
   await $.turn.complete(TURN)
   await clock.advance(1)
   expect(asked).toHaveLength(2)
-  expect(asked[1]).toContain('CURRENT NAME: clmod-mod: init spec')
+  expect(asked[1]).toContain('CURRENT NAME: claude-mods-mod: init spec')
   expect(await (await band()).find({ key: 'pick-0' })).toBeUndefined()
 
   // The subject changes: the band comes back.
@@ -215,16 +262,16 @@ test(
 test('a template without {desc} falls back to the default', { options: { template: '{project}' } }, async ($, on) => {
   world(on, () => HAIKU)
   const out = await $.command.run({ command: 'rs', args: '', ...RUN })
-  expect(out.text).toContain('1. feat/clmod-mod: implement session namer')
+  expect(out.text).toContain('1. feat/claude-mods-mod: implement session namer')
 })
 
 test('/rs help explains and shows a preview with the current config', async ($, on) => {
   world(on, () => HAIKU)
   const out = await $.command.run({ command: 'rs', args: 'help', ...RUN })
-  expect(out.text).toContain('Session name format          {type:L}-{id}/{project:L:,5}-{kind:L}: {desc:L:w2,5}')
-  expect(out.text).toContain('(automatic: clmod, from the folder name)')
-  expect(out.text).toContain('everything found   → bug-1234/clmod-f: fix login redirect')
-  expect(out.text).toContain('description only   → clmod: init spec')
+  expect(out.text).toContain('Session name format          {type:L}-{id}/{project:L}-{kind:L}: {desc:L:w2,5}')
+  expect(out.text).toContain('(automatic: claude-mods, from the folder name)')
+  expect(out.text).toContain('everything found   → bug-1234/claude-mods-f: fix login redirect')
+  expect(out.text).toContain('description only   → claude-mods: init spec')
 })
 
 test('/rs help reports a rejected format', { options: { template: '{project}', project: 'cm' } }, async ($, on) => {
@@ -236,8 +283,8 @@ test('/rs help reports a rejected format', { options: { template: '{project}', p
 
 test('the README example', () => {
   const t = '[{project}] {desc:C:w,5} ({type:U:[FEAT,FIX,CHORE]} #{id:4,_0})'
-  expect(formatName(t, 'clmod', { type: 'fix', id: '42', desc: 'fix login redirect' })).toBe(
-    '[clmod] Fix login redirect (FIX #0042)',
+  expect(formatName(t, 'claude-mods', { type: 'fix', id: '42', desc: 'fix login redirect' })).toBe(
+    '[claude-mods] Fix login redirect (FIX #0042)',
   )
 })
 
@@ -293,14 +340,14 @@ test('Reroll asks Haiku for names different from those shown', async ($, on) => 
 
   const ui = await mountBand($)
   await ui.press({ key: 'reroll' })
-  expect(asked[1]).toContain('ALREADY PROPOSED (give different ones):\n- feat/clmod-mod: implement session namer')
+  expect(asked[1]).toContain('ALREADY PROPOSED (give different ones):\n- feat/claude-mods-mod: implement session namer')
   const band = await mountBand($)
-  expect((await band.findAll({ type: 'Button' })).map(b => b.props.label)).toContain('clmod: design naming band')
+  expect((await band.findAll({ type: 'Input' })).map(f => f.props.value)).toContain('claude-mods: design naming band')
   expect(await band.find({ key: 'pick-1' })).toBeUndefined()
 
   // /rs with the band shown also asks for different names.
   await $.command.run({ command: 'rs', args: '', ...RUN })
-  expect(asked[2]).toContain('- clmod: design naming band')
+  expect(asked[2]).toContain('- claude-mods: design naming band')
 })
 
 test('Stop turns automatic suggestions off for the session; /rs start turns them back on', async ($, on) => {

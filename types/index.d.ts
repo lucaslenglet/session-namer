@@ -1,6 +1,9 @@
 /** Names proposed by Haiku, shown in the band; empty = band hidden. */
 export type Suggestions = string[]
 
+/** Text typed over a suggestion, by its index in the band. */
+export type Edits = Record<string, string>
+
 /** Baseline name (picked or dismissed): suggestions come back only if the subject diverges from it. */
 export type Baseline = string | null
 
@@ -22,6 +25,8 @@ declare module 'claude-code' {
       isGenerating: boolean
       /** The spinner's current frame, advanced by a timer while generating. */
       frame: number
+      /** The suggestions as edited in the band, applied instead of the originals. */
+      edits: Edits
     }
   }
 }
