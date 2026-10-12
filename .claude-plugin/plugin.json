@@ -1,6 +1,6 @@
 {
   "name": "session-namer",
-  "version": "0.8.0",
+  "version": "0.10.0",
   "description": "Suggests session names after each Claude reply (band above the prompt, /rs to force), following a configurable naming convention.",
   "author": {
     "name": "Lucas"
@@ -20,7 +20,7 @@
       "type": "string",
       "title": "Session name format",
       "description": "How suggested names are built, e.g. {type}-{id}/{project}: {desc}. Syntax and live preview: /rs help",
-      "default": "{type:L}-{id}/{project:L:,5}-{kind:L}: {desc:L:w2,5}"
+      "default": "{type:L}-{id}/{project:L}-{kind:L}: {desc:L:w2,5}"
     },
     "rules": {
       "type": "string",
@@ -31,7 +31,7 @@
     "project": {
       "type": "string",
       "title": "Session name project code",
-      "description": "Fixed value for {project}. Empty = derived from the folder name (ClaudeMods → clmod). More: /rs help",
+      "description": "Fixed value for {project}. Empty = derived from the folder name (ClaudeMods → claude-mods). More: /rs help",
       "default": ""
     },
     "showCost": {
